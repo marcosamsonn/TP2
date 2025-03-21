@@ -8,11 +8,12 @@
 # libs
 import numpy as np
 import time
-
+from scipy import interpolate
 # local files
 import geo as geo
 import util as util
 import CTfilter as CTfilter
+import matplotlib.pyplot as plt
 
 ## créer l'ensemble de données d'entrée à partir des fichiers
 def readInput():
@@ -206,14 +207,40 @@ def backproject():
 def reconFourierSlice():
     
     [nbprj, angles, sinogram] = readInput()
-
+    IMAGE = np.zeros((geo.nbvox, geo.nbvox), 'complex')
+    #rows
+    frequences = np.fft.fftshift(np.fft.fftfreq(geo.nbpix))
+    print(frequences)
+    np.fft.fftshift(np.fft.fft(np.fft.ifftshift(sinogram, axes=1)))
+    #sinogram_fft = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(sinogram, axes=1), axis=1), axes=1)
+    sinogram_fft = np.fft.fftshift(np.fft.fft(sinogram, axis=1), axes=1)
+    #x = angle, y =voxel, z= intensity
+    xy_array = []
+    for i in range(len(sinogram_fft)):
+        for j in range(len(sinogram_fft[i])):
+            r = frequences[j]
+            x = r*np.cos(angles[i])
+            y = r*np.sin(angles[i])
+            xy_array.append([x, y])
+    # Plotting xy_array    
+    print(xy_array)
     # initialiser une image reconstruite, complexe
     # pour qu'elle puisse contenir sa version FFT d'abord
-    IMAGE = np.zeros((geo.nbvox, geo.nbvox), 'complex')
     
     # conteneur pour la FFT du sinogramme
     SINOGRAM = np.zeros(sinogram.shape, 'complex')
+    np.add(SINOGRAM, sinogram_fft, out=SINOGRAM)
+    
+    angler_array = np.linspace(-geo.nbvox/2, geo.nbvox/2, geo.nbvox)
 
+    #transformation polaire cartésien
+    #x_array = r_array*np.cos(angles)
+    #y_array = r_array*np.sin(angles)
+    for i in range(len(sinogram)): #  qui vaut normalement nbprj
+        print("working on projection: "+str(i+1)+"/"+str(len(sinogram)))
+        #np.fft(sinogram[i])
+
+    #print("SINOGRAM shape:", SINOGRAM[0])
     #image reconstruite
     image = np.zeros((geo.nbvox, geo.nbvox))
     #votre code ici
@@ -223,18 +250,24 @@ def reconFourierSlice():
    #ce qui fait qu'il y aura un bon échantillonnage de IMAGE
    #au centre et moins bon en périphérie. Un TF inverse de IMAGE vous
    #donnera l'image recherchée.
-
-   
+    xi = np.meshgrid(np.arange(geo.nbvox)-geo.nbvox/2, np.arange(geo.nbvox)-geo.nbvox/2, indexing='ij')
+    image_fft = interpolate.griddata(xy_array, sinogram_fft.ravel(), xi, method='nearest')
+    image_fft_shaped = image_fft.reshape(geo.nbvox, geo.nbvox)
     
-    util.saveImage(image, "fft")
+    image = np.abs(np.fft.fft(np.fft.ifft2(np.fft.ifftshift(image_fft_shaped))))
+    plt.imshow(image, cmap='gray')
+    plt.title('Reconstructed Image using Fourier Slice')
+    plt.colorbar()
+    plt.show()
+    #util.saveImage(image, "fft")
 
 
 ## main ##
 start_time = time.time()
 #laminogram()
 #laminogram_optimized()
-backproject()
-#reconFourierSlice()
+#backproject()
+reconFourierSlice()
 print("--- %s seconds ---" % (time.time() - start_time))
 
 
@@ -246,4 +279,4 @@ La rétroprojection simple créera une image floue. Chaque projection étale ses
 sur des lignes entières, ce qui crée des "trainées" dans l'image reconstruite. C'est
 pourquoi les méthodes plus avancées comme la rétroprojection filtrée (FBP) sont
 utilisées en pratique
-"""
+"""     
