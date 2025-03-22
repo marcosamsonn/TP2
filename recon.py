@@ -8,7 +8,7 @@
 # libs
 import numpy as np
 import time
-from scipy import interpolate
+import scipy.interpolate
 # local files
 import geo as geo
 import util as util
@@ -204,8 +204,8 @@ def backproject():
 
 
 ## reconstruire une image TDM en mode retroprojection
-def reconFourierSlice():
-    
+"""
+def old():
     [nbprj, angles, sinogram] = readInput()
     IMAGE = np.zeros((geo.nbvox, geo.nbvox), 'complex')
     #rows
@@ -251,7 +251,7 @@ def reconFourierSlice():
    #au centre et moins bon en périphérie. Un TF inverse de IMAGE vous
    #donnera l'image recherchée.
     xi = np.meshgrid(np.arange(geo.nbvox)-geo.nbvox/2, np.arange(geo.nbvox)-geo.nbvox/2, indexing='ij')
-    image_fft = interpolate.griddata(xy_array, sinogram_fft.ravel(), xi, method='nearest')
+    image_fft = scipy.interpolate.griddata(xy_array, sinogram_fft.ravel(), xi, method='nearest')
     image_fft_shaped = image_fft.reshape(geo.nbvox, geo.nbvox)
     
     image = np.abs(np.fft.fft(np.fft.ifft2(np.fft.ifftshift(image_fft_shaped))))
@@ -260,7 +260,38 @@ def reconFourierSlice():
     plt.colorbar()
     plt.show()
     #util.saveImage(image, "fft")
+"""
+def reconFourierSlice():
+    [nbprj, angles, sinogram] = readInput()
+    sinogram_fft_rows = np.fft.fftshift(np.fft.fft(np.fft.ifftshift(sinogram, axes=1)), axes=1)
+    r = np.arange(geo.nbpix) - geo.nbpix / 2
+    r, angles = np.meshgrid(r, angles)
+    r = r.ravel()
+    angles = angles.ravel()
+    x_array = (geo.nbpix / 2) + r * np.cos(angles)
+    y_array = (geo.nbpix / 2) + r * np.sin(angles)
+    x, y = np.meshgrid(np.arange(geo.nbpix), np.arange(geo.nbpix))
+    image_fft = scipy.interpolate.griddata((x_array, y_array), sinogram_fft_rows.ravel(), (x.ravel(), y.ravel()), method="nearest").reshape((geo.nbpix, geo.nbpix))
+    image = np.abs(np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(image_fft))))
 
+    # Zoom sur de l'image de manière à avoir le même zoom que l'image d'origine
+    zoom_factor = 1.45
+    image_center = np.array(image.shape) / 2
+    zoomed_image = scipy.ndimage.zoom(image, zoom_factor)
+    crop_x1 = int(image_center[0] * zoom_factor - image_center[0])
+    crop_x2 = crop_x1 + image.shape[0]
+    crop_y1 = int(image_center[1] * zoom_factor - image_center[1])
+    crop_y2 = crop_y1 + image.shape[1]
+    zoomed_image = zoomed_image[crop_x1:crop_x2, crop_y1:crop_y2]
+
+    #On affiche l'image reconstruite et l'image d'origine
+    z8ha9_image = plt.imread('Z8HA9.png')   
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    axs[0].imshow(zoomed_image, cmap="gray")
+    axs[0].set_title("Image reconstruite avec la méthode des tranches de Fourier")
+    axs[1].imshow(z8ha9_image, cmap="gray")
+    axs[1].set_title("Image d'origine")
+    plt.show()
 
 ## main ##
 start_time = time.time()
